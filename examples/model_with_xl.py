@@ -37,7 +37,7 @@ xlt.load_crosslinks(ddir+"polii_xlinks.csv",field_map)
 #xlt.set_residue_pairs_to_display(("K","K"))
 
 ### creating contact map
-xlt.setup_contact_map(upperbound=10)
+xlt.setup_contact_map(upperbound=20)
 
 ### plotting
 xlt.plot_table(prot_listx=prot_list,

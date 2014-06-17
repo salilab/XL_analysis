@@ -37,8 +37,7 @@ class XLTable():
             return "Orange"
 
     def _get_distance(self,r1,c1,r2,c2):
-        print '1:',c1,r1,len(self.index_dict[c1]),'2:',c2,r2,len(self.index_dict[c2])
-
+        #print '1:',c1,r1,len(self.index_dict[c1]),'2:',c2,r2,len(self.index_dict[c2])
         idx1=self.index_dict[c1][r1]
         idx2=self.index_dict[c2][r2]
         return self.av_dist_map[idx1,idx2]
@@ -60,6 +59,7 @@ class XLTable():
             print "add_component_sequence: id %s not found in fasta file" % id_in_fasta_file
             exit()
         self.sequence_dict[protein_name] = str(record_dict[id_in_fasta_file].seq).replace("*", "")
+        #print protein_name,'num res',len(self.sequence_dict[protein_name])
 
     def load_pdb_coordinates(self,pdbfile,chain_to_name_map):
         ''' read coordinates from a pdb file.
