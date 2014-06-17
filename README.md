@@ -1,0 +1,1 @@
+This is a small module to display contact maps and plot crosslinking data. One can provide a set of PDB files, and these will be used to smooth out the contact map.
