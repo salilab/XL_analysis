@@ -4,7 +4,7 @@ import xltable
 
 ### data labels
 ddir='data/'
-odir='output/'
+odir='./'
 chain_to_names_map={"A":"Rpb1",
                     "B":"Rpb2",
                     "C":"Rpb3",
@@ -39,11 +39,12 @@ xlt.load_crosslinks(ddir+"polii_xlinks.csv",field_map)
 ### creating contact map
 xlt.setup_contact_map(upperbound=10)
 
+### plotting
 xlt.plot_table(prot_listx=prot_list,
                prot_listy=prot_list,
                alphablend=0.4,
                scale_symbol_size=1.0,
                gap_between_components=100,
-               filename=odir+"contacts_xlinks",
+               filename=odir+"model_with_xl",
                contactmap=True,
                display_residue_pairs=False)
