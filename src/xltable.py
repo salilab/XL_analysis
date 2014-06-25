@@ -7,27 +7,28 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import utilities
 from collections import defaultdict
+import pickle
 
 class XLTable():
-    ''' class to read, analyze, and plot xlink data on contact maps
+    """ class to read, analyze, and plot xlink data on contact maps
     Canonical way to read the data:
     1) load sequences and name them
     2) load coordinates for those sequences from PDB file
     3) add crosslinks
     4) create contact map
     5) plot
-    '''
+    """
 
     def __init__(self):
         self.sequence_dict={}
-        self.field_map={}
-        self.cross_link_db=[]
-        self.residue_pair_list=[]          # list of special residue pairs to display
-        self.distance_maps=[]              # distance map for each copy of the complex
-        self.index_dict=defaultdict(list)  # location in the dmap of each residue
-
+        self.field_map = {}
+        self.cross_link_db = []
+        self.residue_pair_list = []          # list of special residue pairs to display
+        self.distance_maps = []              # distance map for each copy of the complex
+        self.index_dict = defaultdict(list)  # location in the dmap of each residue
         # internal things
-        self._first=True
+        self._first = True
+
     def _colormap(self, dist, threshold=35, tolerance=0):
         if dist < threshold - tolerance:
             return "Green"
@@ -37,17 +38,31 @@ class XLTable():
             return "Orange"
 
     def _get_distance(self,r1,c1,r2,c2):
-        #print '1:',c1,r1,len(self.index_dict[c1]),'2:',c2,r2,len(self.index_dict[c2])
         idx1=self.index_dict[c1][r1]
         idx2=self.index_dict[c2][r2]
         return self.av_dist_map[idx1,idx2]
 
+    def _internal_load_maps(self,maps_fn):
+        npzfile = np.load(maps_fn)
+        cname_array=npzfile['cname_array']
+        idx_array=npzfile['idx_array']
+        index_dict={}
+        for cname,idxs in zip(cname_array,idx_array):
+            tmp=list(idxs)
+            if -1 in tmp:
+                index_dict[cname]=tmp[0:tmp.index(-1)]
+            else:
+                index_dict[cname]=tmp
+        av_dist_map = npzfile['av_dist_map']
+        contact_map = npzfile['contact_map']
+        return index_dict,av_dist_map,contact_map
+
     def load_sequence_from_fasta_file(self,fasta_file,id_in_fasta_file,protein_name):
-        ''' read sequence. structures are displayed in the same order as sequences are read.
+        """ read sequence. structures are displayed in the same order as sequences are read.
         fasta_file:        file to read
         id_in_fasta_file:  id of desired sequence
         protein_name:      identifier for this sequence (use same name when handling coordinates)
-        can provide the fasta name (for retrieval) and the protein name (for storage) '''
+        can provide the fasta name (for retrieval) and the protein name (for storage) """
         handle = open(fasta_file, "rU")
         record_dict = SeqIO.to_dict(SeqIO.parse(handle, "fasta"))
         handle.close()
@@ -59,15 +74,13 @@ class XLTable():
             print "add_component_sequence: id %s not found in fasta file" % id_in_fasta_file
             exit()
         self.sequence_dict[protein_name] = str(record_dict[id_in_fasta_file].seq).replace("*", "")
-        #print protein_name,'num res',len(self.sequence_dict[protein_name])
 
     def load_pdb_coordinates(self,pdbfile,chain_to_name_map):
-        ''' read coordinates from a pdb file.
+        """ read coordinates from a pdb file.
         pdbfile:             file for reading coords
         chain_to_name_map:   correspond chain ID with protein name (will ONLY read these chains)
         This function returns an error if the sequence for each chain has NOT been read
-
-        '''
+        """
         pdbparser = PDBParser()
         structure = pdbparser.get_structure(pdbfile,pdbfile)
         total_len = sum(len(self.sequence_dict[s]) for s in self.sequence_dict)
@@ -94,10 +107,28 @@ class XLTable():
         if self._first:
             self._first=False
 
+    def save_maps(self,maps_fn):
+        maxlen=max(len(self.index_dict[key]) for key in self.index_dict)
+        cnames=[]
+        idxs=[]
+        for cname,idx in self.index_dict.iteritems():
+            cnames.append(cname)
+            idxs.append(idx+[-1]*(maxlen-len(idx)))
+        idx_array=np.array(idxs)
+        cname_array=np.array(cnames)
+        np.savez(maps_fn,
+                 cname_array=cname_array,
+                 idx_array=idx_array,
+                 av_dist_map=self.av_dist_map,
+                 contact_map=self.contact_map)
+
+    def load_maps(self,maps_fn):
+        self.index_dict,self.av_dist_map,self.contact_map=self._internal_load_maps(maps_fn)
+
     def load_crosslinks(self,crosslinkfile,field_map):
-        ''' read crosslinks from a CSV file.
+        """ read crosslinks from a CSV file.
         provide a dictionary to explain the columns
-        (must contain prot1,prot2,res1,res2,score)'''
+        (must contain prot1,prot2,res1,res2,score)"""
         if len(set(field_map.keys()) & set(("prot1","prot2","res1","res2","score")))<5:
             return
             print "ERROR: your field_map dictionary does not contain required fields"
@@ -105,10 +136,10 @@ class XLTable():
         self.field_map=field_map
 
     def set_residue_pairs_to_display(self,residue_type_pair):
-        ''' select the atom names of residue pairs to plot on the contact map
+        """ select the atom names of residue pairs to plot on the contact map
         list of residues types must be single letter code
         e.g. residue_type_pair=("K","K")
-        '''
+        """
         rtp=sorted(residue_type_pair)
         for prot1 in self.sequence_dict:
             seq1=self.sequence_dict[prot1]
@@ -120,10 +151,9 @@ class XLTable():
                            self.residue_pair_list.append((nres1+1,prot1,nres2+1,prot2))
 
     def setup_contact_map(self,upperbound=20):
-        ''' loop through each distance map and get frequency of contacts
+        """ loop through each distance map and get frequency of contacts
         upperbound:   maximum distance to be marked
-        '''
-
+        """
         # filter each distance and get the frequency of contact
         print 'filtering distance maps'
         all_dists = np.dstack(self.distance_maps)
@@ -134,6 +164,16 @@ class XLTable():
             self.contact_map = 1.0/len(self.distance_maps) * np.sum(binary_dists,axis=2)
         else:
             self.contact_map = binary_dists[:,:,0]
+
+    def setup_difference_map(self,maps_fn1,maps_fn2):
+        idx1,av1,contact1=self._internal_load_maps(maps_fn1)
+        idx2,av2,contact2=self._internal_load_maps(maps_fn2)
+        if idx1!=idx2:
+            print "UH OH: index dictionaries do not match!"
+            exit()
+        self.index_dict=idx1
+        self.av_dist_map=av1 # should we store both somehow? only needed for XL
+        self.contact_map=contact2-contact1
 
     def plot_table(self, prot_listx=None,
                    prot_listy=None,
@@ -146,8 +186,9 @@ class XLTable():
                    confidence_classes=None,
                    alphablend=0.1,
                    scale_symbol_size=1.0,
-                   gap_between_components=0):
-        ''' plot the xlink table with optional contact map.
+                   gap_between_components=0,
+                   colormap=cm.binary):
+        """ plot the xlink table with optional contact map.
         prot_listx:             list of protein names on the x-axis
         prot_listy:             list of protein names on the y-axis
         no_dist_info:           plot only the cross-links as grey spots
@@ -164,7 +205,7 @@ class XLTable():
         alphablend:
         scale_symbol_size:      rescale the symbol for the crosslink
         gap_between_components:
-        '''
+        """
 
         # prepare figure
         fig = plt.figure(figsize=(10, 10))
@@ -259,7 +300,7 @@ class XLTable():
                     tmp_array[resx:lengx,resy:lengy] = self.contact_map[minx:maxx,miny:maxy]
 
             ax.imshow(tmp_array,
-                      cmap=cm.binary,
+                      cmap=colormap,
                       origin='lower',
                       interpolation='nearest')
 
@@ -372,9 +413,9 @@ class XLTable():
                          alpha=0.1,
                          markersize=markersize)
 
-        # zadisplay and write to file
+        # display and write to file
         fig.set_size_inches(0.002 * nresx, 0.002 * nresy)
         [i.set_linewidth(2.0) for i in ax.spines.itervalues()]
         if filename:
-            plt.savefig(filename + ".pdf", dpi=300,transparent="False")
+            plt.savefig(filename, dpi=300,transparent="False")
         plt.show()
