@@ -11,7 +11,7 @@ chain_to_names_map={"A":"Spc97",
 prot_list=["Spc97","Spc98","Spc97A"]
 
 ### reading in sequences and coordinates
-xlt=xltable.XLTable()
+xlt=xltable.XLTable(contact_threshold=20)
 xlt.load_sequence_from_fasta_file(ddir+'yGCP2_full.fasta',
                                   'GCP2_YEAST',
                                   'Spc97')
@@ -25,7 +25,7 @@ for i in range(10):
     xlt.load_pdb_coordinates(ddir+"tusc/tusc_flex%i.pdb"%i,chain_to_names_map)
 
 ### set up contact map and plot
-xlt.setup_contact_map(upperbound=20)
+xlt.setup_contact_map()
 xlt.plot_table(prot_listx=prot_list,
                prot_listy=prot_list,
                alphablend=0.4,

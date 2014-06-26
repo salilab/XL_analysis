@@ -27,7 +27,7 @@ field_map={"prot1":"pep1.accession",
 prot_list=["Rpb1","Rpb2","Rpb3","Rpb4","Rpb5","Rpb6","Rpb7","Rpb8","Rpb9","Rpb10","Rpb11","Rpb12"]
 
 ### loading data
-xlt=xltable.XLTable()
+xlt=xltable.XLTable(contact_threshold=20)
 for chainname in chain_to_names_map:
         xlt.load_sequence_from_fasta_file(fasta_file=ddir+"1WCM.fasta.txt",
                                       id_in_fasta_file="1WCM:"+chainname+"|PDBID|CHAIN|SEQUENCE",
@@ -37,7 +37,7 @@ xlt.load_crosslinks(ddir+"polii_xlinks.csv",field_map)
 #xlt.set_residue_pairs_to_display(("K","K"))
 
 ### creating contact map
-xlt.setup_contact_map(upperbound=20)
+xlt.setup_contact_map()
 
 ### plotting
 xlt.plot_table(prot_listx=prot_list,

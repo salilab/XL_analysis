@@ -19,13 +19,16 @@ class XLTable():
     5) plot
     """
 
-    def __init__(self):
+    def __init__(self,contact_threshold):
         self.sequence_dict={}
         self.field_map = {}
         self.cross_link_db = []
         self.residue_pair_list = []          # list of special residue pairs to display
         self.distance_maps = []              # distance map for each copy of the complex
+        self.contact_freqs = None
+        self.num_pdbs = 0
         self.index_dict = defaultdict(list)  # location in the dmap of each residue
+        self.contact_threshold = contact_threshold
         # internal things
         self._first = True
 
@@ -76,10 +79,10 @@ class XLTable():
         self.sequence_dict[protein_name] = str(record_dict[id_in_fasta_file].seq).replace("*", "")
 
     def load_pdb_coordinates(self,pdbfile,chain_to_name_map):
-        """ read coordinates from a pdb file.
-        pdbfile:             file for reading coords
-        chain_to_name_map:   correspond chain ID with protein name (will ONLY read these chains)
-        This function returns an error if the sequence for each chain has NOT been read
+        """ read coordinates from a pdb file. also appends to distance maps
+        @param pdbfile             file for reading coords
+        @param chain_to_name_map   correspond chain ID with protein name (will ONLY read these chains)
+        \note This function returns an error if the sequence for each chain has NOT been read
         """
         pdbparser = PDBParser()
         structure = pdbparser.get_structure(pdbfile,pdbfile)
@@ -103,9 +106,15 @@ class XLTable():
                     #    print residue
                 prev_stop+=len(self.sequence_dict[cname])
         dists = cdist(coords, coords)
-        self.distance_maps.append(dists)
+        binary_dists = np.where((dists <= self.contact_threshold) & (dists >= 1.0), 1.0, 0.0)
         if self._first:
+            self.av_dist_map = dists
+            self.contact_freqs = binary_dists
             self._first=False
+        else:
+            self.av_dist_map += dists
+            self.contact_freqs += binary_dists
+        self.num_pdbs+=1
 
     def save_maps(self,maps_fn):
         maxlen=max(len(self.index_dict[key]) for key in self.index_dict)
@@ -120,10 +129,10 @@ class XLTable():
                  cname_array=cname_array,
                  idx_array=idx_array,
                  av_dist_map=self.av_dist_map,
-                 contact_map=self.contact_map)
+                 contact_map=self.contact_freqs)
 
     def load_maps(self,maps_fn):
-        self.index_dict,self.av_dist_map,self.contact_map=self._internal_load_maps(maps_fn)
+        self.index_dict,self.av_dist_map,self.contact_freqs=self._internal_load_maps(maps_fn)
 
     def load_crosslinks(self,crosslinkfile,field_map):
         """ read crosslinks from a CSV file.
@@ -150,22 +159,14 @@ class XLTable():
                         if sorted((res1,res2))==rtp:
                            self.residue_pair_list.append((nres1+1,prot1,nres2+1,prot2))
 
-    def setup_contact_map(self,upperbound=20):
+    def setup_contact_map(self):
         """ loop through each distance map and get frequency of contacts
         upperbound:   maximum distance to be marked
         """
-        # filter each distance and get the frequency of contact
-        print 'filtering distance maps'
-        all_dists = np.dstack(self.distance_maps)
-        self.av_dist_map=1.0/len(self.distance_maps) * np.sum(all_dists,axis=2)
+        self.av_dist_map = 1.0/self.num_pdbs * self.av_dist_map
+        self.contact_freqs = 1.0/self.num_pdbs * self.contact_freqs
 
-        binary_dists = np.where((all_dists <= upperbound) & (all_dists >= 1.0), 1.0, 0.0)
-        if all_dists.shape[2]>1:
-            self.contact_map = 1.0/len(self.distance_maps) * np.sum(binary_dists,axis=2)
-        else:
-            self.contact_map = binary_dists[:,:,0]
-
-    def setup_difference_map(self,maps_fn1,maps_fn2):
+    def setup_difference_map(self,maps_fn1,maps_fn2,thresh):
         idx1,av1,contact1=self._internal_load_maps(maps_fn1)
         idx2,av2,contact2=self._internal_load_maps(maps_fn2)
         if idx1!=idx2:
@@ -173,7 +174,21 @@ class XLTable():
             exit()
         self.index_dict=idx1
         self.av_dist_map=av1 # should we store both somehow? only needed for XL
-        self.contact_map=contact2-contact1
+
+        def logic(c1,c2):
+            if c1==0 and c2==0:             # white
+                return 0
+            elif c1>thresh and c2<thresh:   # red
+                return 1
+            elif c1<thresh and c2>thresh:   # blue
+                return 2
+            else:                           # green
+                return 3
+        f = np.vectorize(logic,otypes=[np.int])
+        print 'computing contact map'
+        self.contact_freqs = f(contact1,contact2)
+        print 'done'
+
 
     def plot_table(self, prot_listx=None,
                    prot_listy=None,
@@ -187,7 +202,9 @@ class XLTable():
                    alphablend=0.1,
                    scale_symbol_size=1.0,
                    gap_between_components=0,
-                   colormap=cm.binary):
+                   colormap=cm.binary,
+                   colornorm=None,
+                   cbar_labels=None):
         """ plot the xlink table with optional contact map.
         prot_listx:             list of protein names on the x-axis
         prot_listy:             list of protein names on the y-axis
@@ -213,6 +230,10 @@ class XLTable():
         ax.set_xticks([])
         ax.set_yticks([])
 
+        if cbar_labels is not None:
+            if len(cbar_labels)!=4:
+                print "to provide cbar labels, give 3 fields (first=first input file, last=last input) in oppose order of input contact maps"
+                exit()
         # set the list of proteins on the x axis
         if prot_listx is None:
             prot_listx = self.sequence_dict.keys()
@@ -297,10 +318,11 @@ class XLTable():
                     indexes_y = self.index_dict[py]
                     miny = min(indexes_y)
                     maxy = max(indexes_y)
-                    tmp_array[resx:lengx,resy:lengy] = self.contact_map[minx:maxx,miny:maxy]
+                    tmp_array[resx:lengx,resy:lengy] = self.contact_freqs[minx:maxx,miny:maxy]
 
-            ax.imshow(tmp_array,
+            cax = ax.imshow(tmp_array,
                       cmap=colormap,
+                      norm=colornorm,
                       origin='lower',
                       interpolation='nearest')
 
@@ -416,6 +438,10 @@ class XLTable():
         # display and write to file
         fig.set_size_inches(0.002 * nresx, 0.002 * nresy)
         [i.set_linewidth(2.0) for i in ax.spines.itervalues()]
+        if cbar_labels is not None:
+            cbar = fig.colorbar(cax, ticks=[0.5,1.5,2.5,3.5])
+            cbar.ax.set_yticklabels(cbar_labels)# vertically oriented colorbar
+
         if filename:
             plt.savefig(filename, dpi=300,transparent="False")
         plt.show()
