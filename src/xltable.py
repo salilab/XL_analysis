@@ -27,6 +27,7 @@ class XLTable():
         self.distance_maps = []              # distance map for each copy of the complex
         self.contact_freqs = None
         self.num_pdbs = 0
+        self.num_rmfs = 0
         self.index_dict = defaultdict(list)  # location in the dmap of each residue
         self.contact_threshold = contact_threshold
         # internal things
@@ -116,6 +117,76 @@ class XLTable():
             self.contact_freqs += binary_dists
         self.num_pdbs+=1
 
+    def load_rmf_coordinates(self,rmf_name,rmf_frame_index, chain_names):
+        """ read coordinates from a rmf file. It needs IMP to run. 
+        rmf has been created using IMP.pmi conventions. It gets the
+        highest resolution atomatically. Also appends to distance maps
+        @param rmf_name             file for reading coords
+        @param rmf_frame_index      frame index from the rmf 
+        """
+        import IMP
+        import IMP.atom
+        import IMP.pmi
+        import IMP.pmi.tools
+        
+        self.imp_model=IMP.Model()
+
+        (particles_resolution_one, prots)=self._get_rmf_structure(rmf_name,rmf_frame_index)
+        
+        pdbparser = PDBParser()
+        total_len = sum(len(self.sequence_dict[s]) for s in self.sequence_dict)
+        coords = np.ones((total_len,3)) * 1e5 #default to coords "very far away"
+        prev_stop=0
+        sorted_particles=IMP.pmi.tools.sort_by_residues(particles_resolution_one)
+        for cname in chain_names:
+            if self._first:
+                self.index_dict[cname]=range(prev_stop,prev_stop+len(self.sequence_dict[cname]))
+            rindexes=range(1,len(self.sequence_dict[cname])+1)
+            for rnum in rindexes:
+                sel=IMP.atom.Selection(prots,molecule=cname,residue_index=rnum)
+                selpart=sel.get_selected_particles()
+                selpart_res_one=list(set(particles_resolution_one) & set(selpart))
+                if len(selpart_res_one)>1: 
+                    "selected particles more than one"
+                    exit()
+                if len(selpart_res_one)==0: continue
+                selpart_res_one=selpart_res_one[0]
+                coords[rnum+prev_stop-1,:]=IMP.core.XYZ(selpart_res_one).get_coordinates()
+            prev_stop+=len(self.sequence_dict[cname])
+        dists = cdist(coords, coords)
+        binary_dists = np.where((dists <= self.contact_threshold) & (dists >= 1.0), 1.0, 0.0)
+        if self._first:
+            self.av_dist_map = dists
+            self.contact_freqs = binary_dists
+            self._first=False
+        else:
+            self.av_dist_map += dists
+            self.contact_freqs += binary_dists
+        self.num_rmfs+=1
+
+
+    def _get_rmf_structure(self,rmf_name,rmf_frame_index):
+        import IMP.pmi
+        import IMP.pmi.analysis
+        import IMP.rmf
+        import RMF
+        
+        rh= RMF.open_rmf_file_read_only(rmf_name)
+        prots=IMP.rmf.create_hierarchies(rh, self.imp_model) 
+        IMP.rmf.load_frame(rh, rmf_frame_index)
+        print "getting coordinates for frame %i rmf file %s" % (rmf_frame_index, rmf_name)
+        del rh
+
+        particle_dict=IMP.pmi.analysis.get_particles_at_resolution_one(prots[0])
+     
+        protein_names=particle_dict.keys()
+        particles_resolution_one=[]
+        for k in particle_dict:
+            particles_resolution_one+=(particle_dict[k])
+            
+        return particles_resolution_one, prots
+
+
     def save_maps(self,maps_fn):
         maxlen=max(len(self.index_dict[key]) for key in self.index_dict)
         cnames=[]
@@ -163,8 +234,12 @@ class XLTable():
         """ loop through each distance map and get frequency of contacts
         upperbound:   maximum distance to be marked
         """
-        self.av_dist_map = 1.0/self.num_pdbs * self.av_dist_map
-        self.contact_freqs = 1.0/self.num_pdbs * self.contact_freqs
+        if self.num_pdbs!=0 and self.num_rmfs==0:
+          self.av_dist_map = 1.0/self.num_pdbs * self.av_dist_map
+          self.contact_freqs = 1.0/self.num_pdbs * self.contact_freqs
+        if self.num_pdbs==0 and self.num_rmfs!=0:
+          self.av_dist_map = 1.0/self.num_rmfs * self.av_dist_map
+          self.contact_freqs = 1.0/self.num_rmfs * self.contact_freqs
 
     def setup_difference_map(self,maps_fn1,maps_fn2,thresh):
         idx1,av1,contact1=self._internal_load_maps(maps_fn1)
@@ -203,6 +278,7 @@ class XLTable():
                    scale_symbol_size=1.0,
                    gap_between_components=0,
                    colormap=cm.binary,
+                   crosslink_threshold=None,
                    colornorm=None,
                    cbar_labels=None):
         """ plot the xlink table with optional contact map.
@@ -342,7 +418,7 @@ class XLTable():
 
             try:
               mdist=self._get_distance(r1,c1,r2,c2)
-              color = self._colormap(mdist)
+              color = self._colormap(mdist,threshold=crosslink_threshold)
             except KeyError:
               color="gray"
 
