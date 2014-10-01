@@ -130,14 +130,16 @@ class XLTable():
         import IMP.pmi.tools
         
         self.imp_model=IMP.Model()
-
         (particles_resolution_one, prots)=self._get_rmf_structure(rmf_name,rmf_frame_index)
         
         pdbparser = PDBParser()
         total_len = sum(len(self.sequence_dict[s]) for s in self.sequence_dict)
+            
+            
         coords = np.ones((total_len,3)) * 1e5 #default to coords "very far away"
         prev_stop=0
         sorted_particles=IMP.pmi.tools.sort_by_residues(particles_resolution_one)
+        print chain_names
         for cname in chain_names:
             if self._first:
                 self.index_dict[cname]=range(prev_stop,prev_stop+len(self.sequence_dict[cname]))
@@ -146,9 +148,7 @@ class XLTable():
                 sel=IMP.atom.Selection(prots,molecule=cname,residue_index=rnum)
                 selpart=sel.get_selected_particles()
                 selpart_res_one=list(set(particles_resolution_one) & set(selpart))
-                if len(selpart_res_one)>1: 
-                    "selected particles more than one"
-                    exit()
+                if len(selpart_res_one)>1: continue
                 if len(selpart_res_one)==0: continue
                 selpart_res_one=selpart_res_one[0]
                 coords[rnum+prev_stop-1,:]=IMP.core.XYZ(selpart_res_one).get_coordinates()
@@ -299,7 +299,6 @@ class XLTable():
         scale_symbol_size:      rescale the symbol for the crosslink
         gap_between_components:
         """
-
         # prepare figure
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(111)
