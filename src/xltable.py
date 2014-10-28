@@ -33,17 +33,49 @@ class XLTable():
         # internal things
         self._first = True
 
-    def _colormap(self, dist, threshold=35, tolerance=0):
+    def _colormap_distance(self, dist, threshold=35, tolerance=0):
         if dist < threshold - tolerance:
             return "Green"
         elif dist >= threshold + tolerance:
             return "Orange"
         else:
+            return "Red"
+
+    def _colormap_satisfaction(self, sat, threshold=0.5, tolerance=0.1):
+        if sat >=  threshold + tolerance:
+            print sat, "green"
+            return "Green"
+        elif sat < threshold + tolerance and sat >= threshold - tolerance :
+            print sat, "orange"
+            return "Orange"
+        else:
+            print sat, "orange"        
             return "Orange"
 
+    def _get_percentage_satisfaction(self,r1,c1,r2,c2,threshold=35):
+        try:
+           idx1=self.index_dict[c1][r1]
+        except:
+           return None
+        try:
+           idx2=self.index_dict[c2][r2]
+        except:
+           return None
+        nsatisfied=0
+        for dists in self.dist_maps:
+            dist=dists[idx1,idx2]
+            if dist<threshold: nsatisfied+=1
+        return float(nsatisfied)/len(self.dist_maps)
+
     def _get_distance(self,r1,c1,r2,c2):
-        idx1=self.index_dict[c1][r1]
-        idx2=self.index_dict[c2][r2]
+        try:
+           idx1=self.index_dict[c1][r1]
+        except:
+           return None
+        try:
+           idx2=self.index_dict[c2][r2]
+        except:
+           return None
         return self.av_dist_map[idx1,idx2]
 
     def _internal_load_maps(self,maps_fn):
@@ -109,10 +141,12 @@ class XLTable():
         dists = cdist(coords, coords)
         binary_dists = np.where((dists <= self.contact_threshold) & (dists >= 1.0), 1.0, 0.0)
         if self._first:
+            self.dist_maps= [dists]
             self.av_dist_map = dists
             self.contact_freqs = binary_dists
             self._first=False
         else:
+            self.dist_maps.append(dists)
             self.av_dist_map += dists
             self.contact_freqs += binary_dists
         self.num_pdbs+=1
@@ -156,10 +190,12 @@ class XLTable():
         dists = cdist(coords, coords)
         binary_dists = np.where((dists <= self.contact_threshold) & (dists >= 1.0), 1.0, 0.0)
         if self._first:
+            self.dist_maps= [dists]        
             self.av_dist_map = dists
             self.contact_freqs = binary_dists
             self._first=False
         else:
+            self.dist_maps.append(dists)        
             self.av_dist_map += dists
             self.contact_freqs += binary_dists
         self.num_rmfs+=1
@@ -280,7 +316,8 @@ class XLTable():
                    colormap=cm.binary,
                    crosslink_threshold=None,
                    colornorm=None,
-                   cbar_labels=None):
+                   cbar_labels=None,
+                   color_crosslinks_by_distance=True):
         """ plot the xlink table with optional contact map.
         prot_listx:             list of protein names on the x-axis
         prot_listy:             list of protein names on the y-axis
@@ -399,6 +436,7 @@ class XLTable():
                       cmap=colormap,
                       norm=colornorm,
                       origin='lower',
+                      alpha=0.6,
                       interpolation='nearest')
 
         ax.set_xticks(xticks)
@@ -415,11 +453,23 @@ class XLTable():
             c2=xl[self.field_map["prot2"]]
             score=float(xl[self.field_map["score"]])
 
-            try:
-              mdist=self._get_distance(r1,c1,r2,c2)
-              color = self._colormap(mdist,threshold=crosslink_threshold)
-            except KeyError:
-              color="gray"
+            if color_crosslinks_by_distance:
+
+              try:
+                mdist=self._get_distance(r1,c1,r2,c2)
+                if mdist is None: continue
+                color = self._colormap_distance(mdist,threshold=crosslink_threshold)
+              except KeyError:
+                color="gray"
+            
+            else:
+              
+              try:
+                ps=self._get_percentage_satisfaction(r1,c1,r2,c2)
+                if ps is None: continue
+                color = self._colormap_satisfaction(ps,threshold=0.2,tolerance=0.1)
+              except KeyError:
+                color="gray"            
 
             try:
                 pos1 = r1 + resoffsetx[c1]
