@@ -8,6 +8,12 @@ def get_db_from_csv(csvfilename):
         outputlist.append(l)
     return outputlist
 
+def get_db_from_spacesep(filename):
+    outputlist = []
+    for l in open(filename):
+        outputlist.append(l.rstrip('\r\n').split())
+    return outputlist
+
 class OrderedSet(collections.MutableSet):
     def __init__(self, iterable=None):
         self.end = end = []

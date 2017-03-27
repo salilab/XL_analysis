@@ -242,13 +242,18 @@ class XLTable():
         self.index_dict,self.av_dist_map,self.contact_freqs=self._internal_load_maps(maps_fn)
 
     def load_crosslinks(self,crosslinkfile,field_map):
-        """ read crosslinks from a CSV file.
+        """ read crosslinks from a CSV or space-separated file.
         provide a dictionary to explain the columns
         (must contain prot1,prot2,res1,res2,score)"""
         if len(set(field_map.keys()) & set(("prot1","prot2","res1","res2","score")))<5:
             return
             print "ERROR: your field_map dictionary does not contain required fields"
-        self.cross_link_db=utilities.get_db_from_csv(crosslinkfile)
+        if isinstance(field_map.values()[0], int):
+            # Space separated
+            self.cross_link_db=utilities.get_db_from_spacesep(crosslinkfile)
+        else:
+            # CSV
+            self.cross_link_db=utilities.get_db_from_csv(crosslinkfile)
         self.field_map=field_map
 
     def set_residue_pairs_to_display(self,residue_type_pair):
@@ -569,4 +574,5 @@ class XLTable():
 
         if filename:
             plt.savefig(filename, dpi=300,transparent="False")
-        plt.show()
+        else:
+            plt.show()
