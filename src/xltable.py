@@ -248,7 +248,7 @@ class XLTable():
         if len(set(field_map.keys()) & set(("prot1","prot2","res1","res2","score")))<5:
             return
             print("ERROR: your field_map dictionary does not contain required fields")
-        if isinstance(field_map.values()[0], int):
+        if isinstance(list(field_map.values())[0], int):
             # Space separated
             self.cross_link_db=utilities.get_db_from_spacesep(crosslinkfile)
         else:
@@ -569,7 +569,7 @@ class XLTable():
 
         # display and write to file
         fig.set_size_inches(0.002 * nresx, 0.002 * nresy)
-        [i.set_linewidth(2.0) for i in ax.spines.itervalues()]
+        [i.set_linewidth(2.0) for i in ax.spines.values()]
         if cbar_labels is not None:
             cbar = fig.colorbar(cax, ticks=[0.5,1.5,2.5,3.5])
             cbar.ax.set_yticklabels(cbar_labels)# vertically oriented colorbar
