@@ -422,7 +422,9 @@ class XLTable():
 
         # plot the contact map
         if contactmap:
-            tmp_array = np.zeros((nresx, nresy))
+            # This array can be really large, so use 32-bit floats to trim the
+            # memory usage
+            tmp_array = np.zeros((nresx, nresy), dtype=np.float32)
             for px in prot_listx:
                 for py in prot_listy:
                     resx = resoffsety[px]
