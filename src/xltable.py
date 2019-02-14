@@ -160,8 +160,8 @@ class XLTable():
         """
         import IMP
         import IMP.atom
-        import IMP.pmi
-        import IMP.pmi.tools
+        import IMP.pmi1
+        import IMP.pmi1.tools
         
         self.imp_model=IMP.Model()
         (particles_resolution_one, prots)=self._get_rmf_structure(rmf_name,rmf_frame_index)
@@ -172,7 +172,7 @@ class XLTable():
             
         coords = np.ones((total_len,3)) * 1e5 #default to coords "very far away"
         prev_stop=0
-        sorted_particles=IMP.pmi.tools.sort_by_residues(particles_resolution_one)
+        sorted_particles=IMP.pmi1.tools.sort_by_residues(particles_resolution_one)
         print(chain_names)
         for cname in chain_names:
             if self._first:
@@ -202,8 +202,8 @@ class XLTable():
 
 
     def _get_rmf_structure(self,rmf_name,rmf_frame_index):
-        import IMP.pmi
-        import IMP.pmi.analysis
+        import IMP.pmi1
+        import IMP.pmi1.analysis
         import IMP.rmf
         import RMF
         
@@ -213,7 +213,7 @@ class XLTable():
         print("getting coordinates for frame %i rmf file %s" % (rmf_frame_index, rmf_name))
         del rh
 
-        particle_dict=IMP.pmi.analysis.get_particles_at_resolution_one(prots[0])
+        particle_dict=IMP.pmi1.analysis.get_particles_at_resolution_one(prots[0])
      
         protein_names=particle_dict.keys()
         particles_resolution_one=[]
